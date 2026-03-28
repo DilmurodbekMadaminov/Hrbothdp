@@ -1,0 +1,12 @@
+name = "telegram-bot"
+main = "worker.ts"
+compatibility_date = "2024-03-28"
+
+[vars]
+CHANNEL_USERNAME = "@dilmurodbekmatematika"
+
+# Ma'lumotlar bazasi (Cloudflare D1)
+[[d1_databases]]
+binding = "DB"
+database_name = "bot-db"
+database_id = "YOUR_D1_DATABASE_ID" # Buni Cloudflare panelidan olasiz
