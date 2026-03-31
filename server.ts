@@ -24,9 +24,13 @@ const app = express();
 // ================= DATABASE =================
 let db: any;
 async function initDb() {
+  const dbPath = './data/database.db';
   try {
+    if (!fs.existsSync('./data')) {
+      fs.mkdirSync('./data', { recursive: true });
+    }
     db = await open({
-      filename: './database.db',
+      filename: dbPath,
       driver: sqlite3.Database
     });
     
@@ -40,11 +44,11 @@ async function initDb() {
   } catch (err: any) {
     if (err.message.includes('SQLITE_CORRUPT') || err.message.includes('malformed')) {
       console.error("Database corrupt, recreating...");
-      if (fs.existsSync('./database.db')) {
-        fs.unlinkSync('./database.db');
+      if (fs.existsSync(dbPath)) {
+        fs.unlinkSync(dbPath);
       }
       db = await open({
-        filename: './database.db',
+        filename: dbPath,
         driver: sqlite3.Database
       });
       
