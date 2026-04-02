@@ -187,18 +187,36 @@ async function start() {
   });
 
   if (bot) {
-    try {
-      // Telegram webhooklari ba'zan dev muhitida ishlamaydi, shuning uchun long polling ishlatamiz
-      await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-      
-      // Start long polling without blocking
-      bot.launch().then(() => {
-        console.log('Bot launched using long polling.');
-      }).catch((err: any) => {
-        console.error("Failed to launch bot:", err.message);
-      });
-    } catch (err: any) {
-      console.error("Failed to delete webhook:", err.message);
+    const domain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBHOOK_DOMAIN;
+    
+    if (domain) {
+      try {
+        const webhookPath = `/telegraf/${bot.secretPathComponent()}`;
+        app.use(bot.webhookCallback(webhookPath));
+        await bot.telegram.setWebhook(`https://${domain}${webhookPath}`);
+        console.log(`Bot launched using webhook on ${domain}`);
+      } catch (err: any) {
+        console.error("Failed to set webhook:", err.message);
+      }
+    } else {
+      try {
+        // Telegram webhooklari ba'zan dev muhitida ishlamaydi, shuning uchun long polling ishlatamiz
+        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+        
+        // Start long polling without blocking
+        bot.launch().then(() => {
+          console.log('Bot launched using long polling.');
+        }).catch((err: any) => {
+          if (err.message.includes('409: Conflict')) {
+            console.error("⚠️ XATOLIK: Bot ayni paytda boshqa joyda (masalan, AI Studio'da) ishlab turibdi.");
+            console.error("⚠️ Telegram faqat bitta serverga ulanishga ruxsat beradi. Railway'da ishlashi uchun AI Studio'ni yoping yoki Railway'da domenni yoqing.");
+          } else {
+            console.error("Failed to launch bot:", err.message);
+          }
+        });
+      } catch (err: any) {
+        console.error("Failed to delete webhook:", err.message);
+      }
     }
   }
 
