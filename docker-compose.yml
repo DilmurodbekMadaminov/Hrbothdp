@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: telegram-bot
+    restart: always # Bot o'chib qolsa yoki server yonsa avtomat qayta ishga tushadi (24/7)
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data # Ma'lumotlar bazasi o'chib ketmasligi uchun
+    env_file:
+      - .env # Atrof-muhit o'zgaruvchilari (BOT_TOKEN, ADMIN_ID)
