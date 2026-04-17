@@ -1,12 +1,12 @@
 import "dotenv/config";
 import { Telegraf, Markup } from "telegraf";
 import { message } from "telegraf/filters";
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
 import express from "express";
 import { LRUCache } from "lru-cache";
 import * as fs from "fs";
 import PQueue from "p-queue";
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, increment } from "firebase/firestore";
+import { db, handleFirestoreError, OperationType } from "./firebase.js";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBHOOK_HOST = process.env.APP_URL; // Use AI Studio APP_URL
@@ -25,73 +25,53 @@ const bot = BOT_TOKEN ? new Telegraf(BOT_TOKEN) : null;
 const app = express();
 
 // ================= DATABASE =================
-let db: any;
 async function initDb() {
-  const dbPath = './data/database.db';
   try {
-    if (!fs.existsSync('./data')) {
-      fs.mkdirSync('./data', { recursive: true });
+    // Check if default settings exist, create them if not
+    const hdpLinkRef = doc(db, 'settings', 'hdp_link');
+    const hdpLinkSnap = await getDoc(hdpLinkRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/hdp_link'));
+    if (!hdpLinkSnap.exists()) {
+      await setDoc(hdpLinkRef, { value: 'https://forms.gle/f6ZiQtiqCAH1CLy87' }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/hdp_link'));
     }
-    db = await open({
-      filename: dbPath,
-      driver: sqlite3.Database
-    });
-    
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        user_id INTEGER PRIMARY KEY,
-        hdp INTEGER DEFAULT 0,
-        omon INTEGER DEFAULT 0
-      );
-      CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT
-      );
-    `);
-    
-    await db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('hdp_link', 'https://forms.gle/f6ZiQtiqCAH1CLy87')`);
-    await db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('omon_link', 'https://forms.gle/97m9hCsBFovYKKrX7')`);
-    await db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('channel_username', '${CHANNEL_USERNAME}')`);
+
+    const omonLinkRef = doc(db, 'settings', 'omon_link');
+    const omonLinkSnap = await getDoc(omonLinkRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/omon_link'));
+    if (!omonLinkSnap.exists()) {
+      await setDoc(omonLinkRef, { value: 'https://forms.gle/97m9hCsBFovYKKrX7' }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/omon_link'));
+    }
+
+    const channelRef = doc(db, 'settings', 'channel_username');
+    const channelSnap = await getDoc(channelRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/channel_username'));
+    if (!channelSnap.exists()) {
+      await setDoc(channelRef, { value: CHANNEL_USERNAME }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/channel_username'));
+    }
   } catch (err: any) {
-    if (err.message.includes('SQLITE_CORRUPT') || err.message.includes('malformed')) {
-      console.error("Database corrupt, recreating...");
-      if (fs.existsSync(dbPath)) {
-        fs.unlinkSync(dbPath);
-      }
-      db = await open({
-        filename: dbPath,
-        driver: sqlite3.Database
-      });
-      
-      await db.exec(`
-        CREATE TABLE IF NOT EXISTS users (
-          user_id INTEGER PRIMARY KEY,
-          hdp INTEGER DEFAULT 0,
-          omon INTEGER DEFAULT 0
-        );
-        CREATE TABLE IF NOT EXISTS settings (
-          key TEXT PRIMARY KEY,
-          value TEXT
-        );
-      `);
-      
-      await db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('hdp_link', 'https://forms.gle/f6ZiQtiqCAH1CLy87')`);
-      await db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('omon_link', 'https://forms.gle/97m9hCsBFovYKKrX7')`);
-      await db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('channel_username', '${CHANNEL_USERNAME}')`);
-    } else {
-      throw err;
+    if (err.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration. The client is offline.");
     }
+    throw err;
   }
 }
 
 // ================= HELPERS =================
 async function getSetting(key: string) {
-  const row = await db.get(`SELECT value FROM settings WHERE key = ?`, [key]);
-  return row ? row.value : null;
+  const docRef = doc(db, 'settings', key);
+  try {
+    const snap = await getDoc(docRef);
+    return snap.exists() ? snap.data().value : null;
+  } catch (e: any) {
+    handleFirestoreError(e, OperationType.GET, `settings/${key}`);
+    return null;
+  }
 }
 
 async function setSetting(key: string, value: string) {
-  await db.run(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [key, value]);
+  const docRef = doc(db, 'settings', key);
+  try {
+    await setDoc(docRef, { value }, { merge: true });
+  } catch (e: any) {
+    handleFirestoreError(e, OperationType.WRITE, `settings/${key}`);
+  }
 }
 
 const adminState = new Map<number, string>();
@@ -164,7 +144,16 @@ if (bot) {
   bot.start(async (ctx) => {
     const userId = ctx.from.id;
 
-    await db.run(`INSERT OR IGNORE INTO users (user_id) VALUES (?)`, [userId]);
+    // ensure user exists in Firestore
+    const userRef = doc(db, 'users', String(userId));
+    try {
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) {
+        await setDoc(userRef, { hdp: 0, omon: 0 });
+      }
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.GET, `users/${userId}`);
+    }
 
     const subscribed = await checkSubscription(ctx);
 
@@ -193,7 +182,12 @@ if (bot) {
       return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
     }
 
-    await db.run(`UPDATE users SET hdp = hdp + 1 WHERE user_id = ?`, [ctx.from.id]);
+    try {
+      const userRef = doc(db, 'users', String(ctx.from.id));
+      await setDoc(userRef, { hdp: increment(1) }, { merge: true });
+    } catch(e: any) {
+      handleFirestoreError(e, OperationType.UPDATE, `users/${ctx.from.id}`);
+    }
     const hdpLink = await getSetting('hdp_link');
 
     return ctx.reply("HDP LC uchun forma:", Markup.inlineKeyboard([
@@ -207,7 +201,12 @@ if (bot) {
       return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
     }
 
-    await db.run(`UPDATE users SET omon = omon + 1 WHERE user_id = ?`, [ctx.from.id]);
+    try {
+      const userRef = doc(db, 'users', String(ctx.from.id));
+      await setDoc(userRef, { omon: increment(1) }, { merge: true });
+    } catch(e: any) {
+      handleFirestoreError(e, OperationType.UPDATE, `users/${ctx.from.id}`);
+    }
     const omonLink = await getSetting('omon_link');
 
     return ctx.reply("Omon School uchun forma:", Markup.inlineKeyboard([
@@ -219,17 +218,29 @@ if (bot) {
     ctx.reply(`Sizning Telegram ID raqamingiz: <code>${ctx.from.id}</code>\n\nShu raqamni nusxalab, AI Studio'dagi "Secrets" (yoki Environment Variables) bo'limiga <b>ADMIN_ID</b> nomi bilan qo'shing. Shundan so'ng botni qayta ishga tushirsangiz /admin buyrug'i ishlaydi.`, { parse_mode: "HTML" });
   });
 
-  bot.command("admin", async (ctx) => {
-    if (!ADMIN_ID || ctx.from.id !== ADMIN_ID) return;
-
-    const usersRow = await db.get(`SELECT COUNT(*) as total FROM users`);
-    const clicksRow = await db.get(`SELECT SUM(hdp) as total_hdp, SUM(omon) as total_omon FROM users`);
+  async function sendAdminPanel(ctx) {
+    let usersSnap: any = { docs: [], size: 0, forEach: () => {} };
+    try {
+      usersSnap = await getDocs(collection(db, 'users'));
+    } catch(e: any) {
+      handleFirestoreError(e, OperationType.LIST, 'users');
+    }
+    
+    let totalHdp = 0;
+    let totalOmon = 0;
+    usersSnap.forEach((docSnap) => {
+      const data = docSnap.data();
+      totalHdp += data.hdp || 0;
+      totalOmon += data.omon || 0;
+    });
+    
+    const usersCount = usersSnap.size;
 
     const hdpLink = await getSetting('hdp_link');
     const omonLink = await getSetting('omon_link');
     const channel = await getSetting('channel_username');
 
-    const text = `📊 Statistika:\n\n👥 Foydalanuvchilar: ${usersRow.total || 0}\n\n🔹 HDP LC bosilgan: ${clicksRow.total_hdp || 0}\n🔹 Omon School bosilgan: ${clicksRow.total_omon || 0}\n\n⚙️ <b>Joriy sozlamalar:</b>\nKanal: ${channel}\nHDP Link: ${hdpLink}\nOmon Link: ${omonLink}`;
+    const text = `📊 Statistika:\n\n👥 Foydalanuvchilar: ${usersCount}\n\n🔹 HDP LC bosilgan: ${totalHdp}\n🔹 Omon School bosilgan: ${totalOmon}\n\n⚙️ <b>Joriy sozlamalar:</b>\nKanal: ${channel}\nHDP Link: ${hdpLink}\nOmon Link: ${omonLink}`;
 
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback("✏️ Kanalni o'zgartirish", "edit_channel")],
@@ -239,7 +250,12 @@ if (bot) {
       [Markup.button.callback("❌ Bekor qilish", "cancel_admin")]
     ]);
 
-    ctx.reply(text, { parse_mode: "HTML", ...keyboard });
+    await ctx.reply(text, { parse_mode: "HTML", ...keyboard });
+  }
+
+  bot.command("admin", async (ctx) => {
+    if (!ADMIN_ID || ctx.from.id !== ADMIN_ID) return;
+    await sendAdminPanel(ctx);
   });
 
   bot.action("edit_channel", async (ctx) => {
@@ -286,16 +302,22 @@ if (bot) {
         adminState.delete(userId);
         ctx.reply("Xabar tarqatish boshlandi. Bu biroz vaqt olishi mumkin...");
         
-        const users = await db.all(`SELECT user_id FROM users`);
+        let usersSnap: any = { docs: [] };
+        try {
+          usersSnap = await getDocs(collection(db, 'users'));
+        } catch(e: any) {
+          handleFirestoreError(e, OperationType.LIST, 'users');
+        }
         let successCount = 0;
         let failCount = 0;
 
         // Xabarlarni orqa fonda tarqatish (Queue orqali)
         (async () => {
-          for (const user of users) {
+          for (const docSnap of usersSnap.docs) {
+            const user_id = Number(docSnap.id);
             await messageQueue.add(async () => {
               try {
-                await ctx.copyMessage(user.user_id);
+                await ctx.copyMessage(user_id);
                 successCount++;
               } catch (err) {
                 failCount++;
@@ -315,16 +337,18 @@ if (bot) {
       const text = msg.text;
 
       if (state === "awaiting_channel") {
+        subCache.clear();
         await setSetting('channel_username', text);
-        ctx.reply("✅ Kanal muvaffaqiyatli o'zgartirildi!");
+        await ctx.reply("✅ Kanal muvaffaqiyatli o'zgartirildi!");
       } else if (state === "awaiting_hdp") {
         await setSetting('hdp_link', text);
-        ctx.reply("✅ HDP LC silkasi o'zgartirildi!");
+        await ctx.reply("✅ HDP LC silkasi o'zgartirildi!");
       } else if (state === "awaiting_omon") {
         await setSetting('omon_link', text);
-        ctx.reply("✅ Omon School silkasi o'zgartirildi!");
+        await ctx.reply("✅ Omon School silkasi o'zgartirildi!");
       }
       adminState.delete(userId);
+      await sendAdminPanel(ctx);
       return;
     }
     return next();
@@ -387,7 +411,7 @@ async function start() {
   const shutdown = () => {
     console.log('Shutting down...');
     server.close(() => {
-      db.close(() => process.exit(0));
+      process.exit(0);
     });
   };
 
