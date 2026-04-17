@@ -115,7 +115,9 @@ async function checkSubscription(ctx) {
       member.status === "administrator"
     );
     
-    subCache.set(userId, isSubscribed);
+    if (isSubscribed) {
+      subCache.set(userId, isSubscribed);
+    }
     return isSubscribed;
   } catch (err) {
     console.error("Subscription check error:", err.message);
@@ -174,6 +176,7 @@ if (bot) {
   });
 
   bot.action("check_sub", async (ctx) => {
+    subCache.delete(ctx.from.id);
     const subscribed = await checkSubscription(ctx);
 
     if (!subscribed) {
