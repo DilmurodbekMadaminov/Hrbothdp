@@ -57,17 +57,17 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin() && isValidUser();
-      allow update: if isAdmin() && isValidUser();
-      allow delete: if isAdmin();
+      allow read: if true;
+      allow create: if isValidUser();
+      allow update: if isValidUser();
+      allow delete: if false;
     }
 
     match /settings/{settingId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin() && isValidSetting();
-      allow update: if isAdmin() && isValidSetting();
-      allow delete: if isAdmin();
+      allow read: if true;
+      allow create: if isValidSetting();
+      allow update: if isValidSetting();
+      allow delete: if false;
     }
   }
 }
