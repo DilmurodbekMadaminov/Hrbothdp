@@ -223,8 +223,8 @@ if (bot) {
     }
     const hdpLink = await getSetting('hdp_link');
 
-    return ctx.reply("HDP LC uchun forma:", Markup.inlineKeyboard([
-      [Markup.button.url("Formani ochish", hdpLink)],
+    return ctx.reply("HDP LC uchun ariza topshirish:", Markup.inlineKeyboard([
+      [Markup.button.url("Ariza topshirish", hdpLink)],
     ]));
   });
 
@@ -242,8 +242,8 @@ if (bot) {
     }
     const omonLink = await getSetting('omon_link');
 
-    return ctx.reply("Omon School uchun forma:", Markup.inlineKeyboard([
-      [Markup.button.url("Formani ochish", omonLink)],
+    return ctx.reply("Omon School uchun ariza topshirish:", Markup.inlineKeyboard([
+      [Markup.button.url("Ariza topshirish", omonLink)],
     ]));
   });
 
