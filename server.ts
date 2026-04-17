@@ -92,9 +92,23 @@ async function checkSubscription(ctx) {
   }
 
   try {
-    const channel = await getSetting('channel_username');
+    const rawChannel = await getSetting('channel_username') || "";
+    let channelId = rawChannel.trim();
+    
+    // Telegram API requires numeric ID or @username
+    // Convert https://t.me/username to @username
+    if (channelId.includes('t.me/')) {
+      const parts = channelId.split('t.me/');
+      const username = parts[1].replace(/\/$/, '');
+      if (!username.startsWith('+') && !channelId.includes('joinchat')) {
+        channelId = '@' + username;
+      }
+    } else if (!channelId.startsWith('@') && !channelId.startsWith('-') && !channelId.startsWith('http')) {
+      channelId = '@' + channelId;
+    }
+
     const member = await ctx.telegram.getChatMember(
-      channel,
+      channelId,
       userId
     );
 
@@ -115,8 +129,17 @@ async function checkSubscription(ctx) {
 }
 
 async function subscriptionKeyboard() {
-  const channel = await getSetting('channel_username');
-  const channelUrl = channel.startsWith('@') ? `https://t.me/${channel.replace(/^@/,"")}` : channel;
+  const channel = await getSetting('channel_username') || "";
+  let channelUrl = channel.trim();
+  
+  if (!channelUrl.startsWith('http')) {
+     if (channelUrl.startsWith('@')) {
+         channelUrl = `https://t.me/${channelUrl.replace(/^@/, "")}`;
+     } else {
+         channelUrl = `https://t.me/${channelUrl}`;
+     }
+  }
+
   return Markup.inlineKeyboard([
     [
       Markup.button.url("Obuna bo'lish", channelUrl),
@@ -349,8 +372,19 @@ if (bot) {
       if (state === "awaiting_channel") {
         subCache.clear();
         settingsCache.delete('channel_username');
-        await setSetting('channel_username', text);
-        await ctx.reply("✅ Kanal muvaffaqiyatli o'zgartirildi!");
+        
+        let cleanedChannel = text.trim();
+        // Convert input formats into a universal URL link, or fallback to exact string if invite link
+        if (!cleanedChannel.startsWith('http')) {
+           if (cleanedChannel.startsWith('@')) {
+               cleanedChannel = `https://t.me/${cleanedChannel.replace('@', '')}`;
+           } else if (!cleanedChannel.startsWith('-')) {
+               cleanedChannel = `https://t.me/${cleanedChannel}`;
+           }
+        }
+        
+        await setSetting('channel_username', cleanedChannel);
+        await ctx.reply(`✅ Kanal muvaffaqiyatli o'zgartirildi!\nYangi havola: ${cleanedChannel}`);
       } else if (state === "awaiting_hdp") {
         settingsCache.delete('hdp_link');
         await setSetting('hdp_link', text);
