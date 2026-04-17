@@ -5,8 +5,8 @@ import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 import express from "express";
 import { LRUCache } from "lru-cache";
-import PQueue from "p-queue";
 import * as fs from "fs";
+import PQueue from "p-queue";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBHOOK_HOST = process.env.APP_URL; // Use AI Studio APP_URL
@@ -52,9 +52,6 @@ async function initDb() {
     await db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('hdp_link', 'https://forms.gle/f6ZiQtiqCAH1CLy87')`);
     await db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('omon_link', 'https://forms.gle/97m9hCsBFovYKKrX7')`);
     await db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('channel_username', '${CHANNEL_USERNAME}')`);
-    
-    // Auto-update to new channel if old one is still used
-    await db.run(`UPDATE settings SET value = '@Xorazm_ish_bozor1' WHERE key = 'channel_username' AND value = '@dilmurodbekmatematika'`);
   } catch (err: any) {
     if (err.message.includes('SQLITE_CORRUPT') || err.message.includes('malformed')) {
       console.error("Database corrupt, recreating...");
@@ -224,15 +221,12 @@ if (bot) {
 
     const usersRow = await db.get(`SELECT COUNT(*) as total FROM users`);
     const clicksRow = await db.get(`SELECT SUM(hdp) as total_hdp, SUM(omon) as total_omon FROM users`);
-    const totalUsers = usersRow?.total || 0;
-    const total_hdp = clicksRow?.total_hdp || 0;
-    const total_omon = clicksRow?.total_omon || 0;
 
     const hdpLink = await getSetting('hdp_link');
     const omonLink = await getSetting('omon_link');
     const channel = await getSetting('channel_username');
 
-    const text = `📊 Statistika:\n\n👥 Foydalanuvchilar: ${totalUsers}\n\n🔹 HDP LC bosilgan: ${total_hdp}\n🔹 Omon School bosilgan: ${total_omon}\n\n⚙️ <b>Joriy sozlamalar:</b>\nKanal: ${channel}\nHDP Link: ${hdpLink}\nOmon Link: ${omonLink}`;
+    const text = `📊 Statistika:\n\n👥 Foydalanuvchilar: ${usersRow.total || 0}\n\n🔹 HDP LC bosilgan: ${clicksRow.total_hdp || 0}\n🔹 Omon School bosilgan: ${clicksRow.total_omon || 0}\n\n⚙️ <b>Joriy sozlamalar:</b>\nKanal: ${channel}\nHDP Link: ${hdpLink}\nOmon Link: ${omonLink}`;
 
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback("✏️ Kanalni o'zgartirish", "edit_channel")],
