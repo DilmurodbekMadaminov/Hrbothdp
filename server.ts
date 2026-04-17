@@ -53,12 +53,20 @@ async function initDb() {
   }
 }
 
+const settingsCache = new Map<string, string>();
+
 // ================= HELPERS =================
 async function getSetting(key: string) {
+  if (settingsCache.has(key)) {
+    return settingsCache.get(key);
+  }
+
   const docRef = doc(db, 'settings', key);
   try {
     const snap = await getDoc(docRef);
-    return snap.exists() ? snap.data().value : null;
+    const val = snap.exists() ? snap.data().value : null;
+    if (val !== null) settingsCache.set(key, val);
+    return val;
   } catch (e: any) {
     handleFirestoreError(e, OperationType.GET, `settings/${key}`);
     return null;
@@ -69,6 +77,7 @@ async function setSetting(key: string, value: string) {
   const docRef = doc(db, 'settings', key);
   try {
     await setDoc(docRef, { value }, { merge: true });
+    settingsCache.set(key, value); // Keep cache in sync
   } catch (e: any) {
     handleFirestoreError(e, OperationType.WRITE, `settings/${key}`);
   }
@@ -172,6 +181,7 @@ if (bot) {
       return ctx.answerCbQuery("Siz hali obuna bo‘lmagansiz!", { show_alert: true });
     }
 
+    ctx.answerCbQuery("✅ Obuna tasdiqlandi!").catch(() => {});
     await ctx.deleteMessage().catch(() => {});
     return ctx.reply("Ish joyini tanlang:", mainMenuKeyboard());
   });
@@ -338,12 +348,15 @@ if (bot) {
 
       if (state === "awaiting_channel") {
         subCache.clear();
+        settingsCache.delete('channel_username');
         await setSetting('channel_username', text);
         await ctx.reply("✅ Kanal muvaffaqiyatli o'zgartirildi!");
       } else if (state === "awaiting_hdp") {
+        settingsCache.delete('hdp_link');
         await setSetting('hdp_link', text);
         await ctx.reply("✅ HDP LC silkasi o'zgartirildi!");
       } else if (state === "awaiting_omon") {
+        settingsCache.delete('omon_link');
         await setSetting('omon_link', text);
         await ctx.reply("✅ Omon School silkasi o'zgartirildi!");
       }
