@@ -137,17 +137,22 @@ async function checkSubscription(ctx) {
   }
 }
 
+// Utility to fix any URL string from DB before passing to Telegram Markup
+function formatButtonUrl(url: string | null | undefined): string {
+  if (!url) return "https://telegram.org"; // Safe fallback
+  let cleaned = url.trim();
+  if (cleaned.startsWith('@')) {
+      return `https://t.me/${cleaned.replace(/^@/, "")}`;
+  }
+  if (!cleaned.startsWith('http://') && !cleaned.startsWith('https://')) {
+      return `https://${cleaned}`;
+  }
+  return cleaned;
+}
+
 async function subscriptionKeyboard() {
   const channel = await getSetting('channel_username') || "";
-  let channelUrl = channel.trim();
-  
-  if (!channelUrl.startsWith('http')) {
-     if (channelUrl.startsWith('@')) {
-         channelUrl = `https://t.me/${channelUrl.replace(/^@/, "")}`;
-     } else {
-         channelUrl = `https://t.me/${channelUrl}`;
-     }
-  }
+  const channelUrl = formatButtonUrl(channel);
 
   return Markup.inlineKeyboard([
     [
@@ -227,9 +232,10 @@ if (bot) {
     })();
     
     const hdpLink = await getSetting('hdp_link');
+    const safeUrl = formatButtonUrl(hdpLink);
 
     return ctx.reply("HDP LC uchun ariza topshirish:", Markup.inlineKeyboard([
-      [Markup.button.url("Ariza topshirish", hdpLink)],
+      [Markup.button.url("Ariza topshirish", safeUrl)],
     ]));
   });
 
@@ -251,9 +257,10 @@ if (bot) {
     })();
     
     const omonLink = await getSetting('omon_link');
+    const safeUrl = formatButtonUrl(omonLink);
 
     return ctx.reply("Omon School uchun ariza topshirish:", Markup.inlineKeyboard([
-      [Markup.button.url("Ariza topshirish", omonLink)],
+      [Markup.button.url("Ariza topshirish", safeUrl)],
     ]));
   });
 
@@ -414,8 +421,15 @@ if (bot) {
 
 // ================= WEBHOOK & SERVER START =================
 async function start() {
-  await initDb();
-  
+  // Calculate actual port for hosting environments like Railway
+  const isRailway = !!process.env.RAILWAY_ENVIRONMENT_NAME || !!process.env.RAILWAY_STATIC_URL;
+  const actualPort = (isRailway && process.env.PORT) ? parseInt(process.env.PORT) : PORT;
+
+  // start express first so health checks pass
+  const server = app.listen(actualPort, '0.0.0.0', () => {
+    console.log(`Server running on port ${actualPort}`);
+  });
+
   // Basic route to show bot status
   app.get('/', (req, res) => {
     if (!BOT_TOKEN) {
@@ -424,6 +438,12 @@ async function start() {
       res.send("<h1>Bot is Running</h1><p>The Telegram bot is active.</p>");
     }
   });
+
+  try {
+    await initDb();
+  } catch (err) {
+    console.error("Database initialization failed:", err);
+  }
 
   if (bot) {
     const domain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBHOOK_DOMAIN;
@@ -456,15 +476,6 @@ async function start() {
     }
   }
 
-  // Calculate actual port for hosting environments like Railway
-  const isRailway = !!process.env.RAILWAY_ENVIRONMENT_NAME || !!process.env.RAILWAY_STATIC_URL;
-  const actualPort = (isRailway && process.env.PORT) ? parseInt(process.env.PORT) : PORT;
-
-  // start express
-  const server = app.listen(actualPort, '0.0.0.0', () => {
-    console.log(`Server running on port ${actualPort}`);
-  });
-
   // graceful shutdown
   const shutdown = () => {
     console.log('Shutting down...');
@@ -477,4 +488,4 @@ async function start() {
   process.once('SIGTERM', shutdown);
 }
 
-start();
+start().catch(console.error);
