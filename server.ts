@@ -11,7 +11,7 @@ import { db, handleFirestoreError, OperationType } from "./firebase.js";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBHOOK_HOST = process.env.APP_URL; // Use AI Studio APP_URL
-const CHANNEL_USERNAME = process.env.CHANNEL_USERNAME || "https://t.me/dilmurodbekmatematika";
+const CHANNEL_USERNAME = process.env.CHANNEL_USERNAME || "https://t.me/Xorazm_ish_bozor1";
 const ADMIN_ID = process.env.ADMIN_ID ? Number(process.env.ADMIN_ID) : undefined;
 const PORT = 3000; // AI Studio requires port 3000
 
@@ -47,7 +47,7 @@ async function initDb() {
 
     const channelRef = doc(db, 'settings', 'channel_username');
     const channelSnap = await getDoc(channelRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/channel_username'));
-    if (!channelSnap.exists()) {
+    if (!channelSnap.exists() || channelSnap.data().value === "https://t.me/dilmurodbekmatematika") {
       await setDoc(channelRef, { value: CHANNEL_USERNAME }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/channel_username'));
     }
   } catch (err: any) {
