@@ -3,6 +3,7 @@ import { Telegraf, Markup } from "telegraf";
 import { message } from "telegraf/filters";
 import express from "express";
 import { LRUCache } from "lru-cache";
+import { Agent } from "https";
 import * as fs from "fs";
 import PQueue from "p-queue";
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs, increment } from "firebase/firestore";
@@ -10,7 +11,7 @@ import { db, handleFirestoreError, OperationType } from "./firebase.js";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBHOOK_HOST = process.env.APP_URL; // Use AI Studio APP_URL
-const CHANNEL_USERNAME = process.env.CHANNEL_USERNAME || "@Xorazm_ish_bozor1";
+const CHANNEL_USERNAME = process.env.CHANNEL_USERNAME || "https://t.me/dilmurodbekmatematika";
 const ADMIN_ID = process.env.ADMIN_ID ? Number(process.env.ADMIN_ID) : undefined;
 const PORT = 3000; // AI Studio requires port 3000
 
@@ -21,7 +22,11 @@ if (!BOT_TOKEN) {
   console.error("Missing required environment variable: BOT_TOKEN.\nPlease configure it in the AI Studio Secrets panel.");
 }
 
-const bot = BOT_TOKEN ? new Telegraf(BOT_TOKEN) : null;
+// Enable KeepAlive for much faster Telegram API requests by reusing TLS connections
+const httpsAgent = new Agent({ keepAlive: true, maxSockets: 100 });
+const bot = BOT_TOKEN ? new Telegraf(BOT_TOKEN, {
+  telegram: { agent: httpsAgent }
+}) : null;
 const app = express();
 
 // ================= DATABASE =================
@@ -74,13 +79,17 @@ async function getSetting(key: string) {
 }
 
 async function setSetting(key: string, value: string) {
-  const docRef = doc(db, 'settings', key);
-  try {
-    await setDoc(docRef, { value }, { merge: true });
-    settingsCache.set(key, value); // Keep cache in sync
-  } catch (e: any) {
-    handleFirestoreError(e, OperationType.WRITE, `settings/${key}`);
-  }
+  settingsCache.set(key, value); // Immediately apply to cache for instant response
+
+  // Background task to persist to firestore without blocking the user
+  (async () => {
+    const docRef = doc(db, 'settings', key);
+    try {
+      await setDoc(docRef, { value }, { merge: true });
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.WRITE, `settings/${key}`);
+    }
+  })();
 }
 
 const adminState = new Map<number, string>();
@@ -162,30 +171,21 @@ function mainMenuKeyboard() {
 
 // ================= HANDLERS =================
 if (bot) {
-  // Queue middleware to prevent bot unresponsiveness under high load
-  bot.use(async (ctx, next) => {
-    return messageQueue.add(async () => {
-      try {
-        await next();
-      } catch (err) {
-        console.error("Error processing update:", err);
-      }
-    });
-  });
-
   bot.start(async (ctx) => {
     const userId = ctx.from.id;
 
-    // ensure user exists in Firestore
-    const userRef = doc(db, 'users', String(userId));
-    try {
-      const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) {
-        await setDoc(userRef, { hdp: 0, omon: 0 });
+    // Background task: ensure user exists in Firestore
+    (async () => {
+      const userRef = doc(db, 'users', String(userId));
+      try {
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) {
+          await setDoc(userRef, { hdp: 0, omon: 0 });
+        }
+      } catch (e: any) {
+        handleFirestoreError(e, OperationType.GET, `users/${userId}`);
       }
-    } catch (e: any) {
-      handleFirestoreError(e, OperationType.GET, `users/${userId}`);
-    }
+    })();
 
     const subscribed = await checkSubscription(ctx);
 
@@ -210,17 +210,22 @@ if (bot) {
   });
 
   bot.hears("HDP LC", async (ctx) => {
+    subCache.delete(ctx.from.id); // Asl vaqtda tekshirish uchun keshni tozamiz
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) {
       return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
     }
 
-    try {
-      const userRef = doc(db, 'users', String(ctx.from.id));
-      await setDoc(userRef, { hdp: increment(1) }, { merge: true });
-    } catch(e: any) {
-      handleFirestoreError(e, OperationType.UPDATE, `users/${ctx.from.id}`);
-    }
+    // Background task: Analytics
+    (async () => {
+      try {
+        const userRef = doc(db, 'users', String(ctx.from.id));
+        await setDoc(userRef, { hdp: increment(1) }, { merge: true });
+      } catch(e: any) {
+        handleFirestoreError(e, OperationType.UPDATE, `users/${ctx.from.id}`);
+      }
+    })();
+    
     const hdpLink = await getSetting('hdp_link');
 
     return ctx.reply("HDP LC uchun ariza topshirish:", Markup.inlineKeyboard([
@@ -229,17 +234,22 @@ if (bot) {
   });
 
   bot.hears("Omon School", async (ctx) => {
+    subCache.delete(ctx.from.id); // Asl vaqtda tekshirish uchun keshni tozamiz
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) {
       return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
     }
 
-    try {
-      const userRef = doc(db, 'users', String(ctx.from.id));
-      await setDoc(userRef, { omon: increment(1) }, { merge: true });
-    } catch(e: any) {
-      handleFirestoreError(e, OperationType.UPDATE, `users/${ctx.from.id}`);
-    }
+    // Background task: Analytics
+    (async () => {
+      try {
+        const userRef = doc(db, 'users', String(ctx.from.id));
+        await setDoc(userRef, { omon: increment(1) }, { merge: true });
+      } catch(e: any) {
+        handleFirestoreError(e, OperationType.UPDATE, `users/${ctx.from.id}`);
+      }
+    })();
+    
     const omonLink = await getSetting('omon_link');
 
     return ctx.reply("Omon School uchun ariza topshirish:", Markup.inlineKeyboard([
@@ -406,7 +416,7 @@ if (bot) {
 async function start() {
   await initDb();
   
-  // Basic route to show bot status in the AI Studio preview
+  // Basic route to show bot status
   app.get('/', (req, res) => {
     if (!BOT_TOKEN) {
       res.send("<h1>Bot Error</h1><p>BOT_TOKEN is missing. Please add it to the Secrets panel.</p>");
@@ -415,17 +425,13 @@ async function start() {
     }
   });
 
-  // start express first so health checks pass
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-
   if (bot) {
     const domain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBHOOK_DOMAIN;
     
     if (domain) {
       try {
         const webhookPath = `/telegraf/${bot.secretPathComponent()}`;
+        // Register webhook middleware explicitly before starting the server
         app.use(bot.webhookCallback(webhookPath));
         await bot.telegram.setWebhook(`https://${domain}${webhookPath}`);
         console.log(`Bot launched using webhook on ${domain}`);
@@ -434,16 +440,12 @@ async function start() {
       }
     } else {
       try {
-        // Telegram webhooklari ba'zan dev muhitida ishlamaydi, shuning uchun long polling ishlatamiz
         await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-        
-        // Start long polling without blocking
         bot.launch().then(() => {
           console.log('Bot launched using long polling.');
         }).catch((err: any) => {
           if (err.message.includes('409: Conflict')) {
             console.error("⚠️ XATOLIK: Bot ayni paytda boshqa joyda (masalan, AI Studio'da) ishlab turibdi.");
-            console.error("⚠️ Telegram faqat bitta serverga ulanishga ruxsat beradi. Railway'da ishlashi uchun AI Studio'ni yoping yoki Railway'da domenni yoqing.");
           } else {
             console.error("Failed to launch bot:", err.message);
           }
@@ -453,6 +455,15 @@ async function start() {
       }
     }
   }
+
+  // Calculate actual port for hosting environments like Railway
+  const isRailway = !!process.env.RAILWAY_ENVIRONMENT_NAME || !!process.env.RAILWAY_STATIC_URL;
+  const actualPort = (isRailway && process.env.PORT) ? parseInt(process.env.PORT) : PORT;
+
+  // start express
+  const server = app.listen(actualPort, '0.0.0.0', () => {
+    console.log(`Server running on port ${actualPort}`);
+  });
 
   // graceful shutdown
   const shutdown = () => {
