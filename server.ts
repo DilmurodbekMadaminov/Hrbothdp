@@ -246,32 +246,6 @@ if (bot) {
     ]));
   });
 
-  bot.hears("Omon School", async (ctx) => {
-    const subscribed = await checkSubscription(ctx);
-    if (!subscribed) {
-      return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
-    }
-
-    // Background task: Analytics
-    (async () => {
-      try {
-        const userRef = doc(db, 'users', String(ctx.from.id));
-        await setDoc(userRef, { omon: increment(1) }, { merge: true });
-      } catch(e: any) {
-        handleFirestoreError(e, OperationType.UPDATE, `users/${ctx.from.id}`);
-      }
-    })();
-    
-    const omonLink = await getSetting('omon_link');
-    const safeUrl = formatButtonUrl(omonLink);
-
-    return ctx.reply("Omon School filialini tanlang:", Markup.inlineKeyboard([
-      [Markup.button.callback("Urganch filiali", "branch_omon_urganch")],
-      [Markup.button.callback("Gurlan filiali", "branch_omon_gurlan")],
-      [Markup.button.callback("Shovot filiali", "branch_omon_shovot")]
-    ]));
-  });
-
   bot.hears(["Omon school Urganch filiali", "Omon school Urganch filial"], async (ctx) => {
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) {
@@ -448,7 +422,7 @@ if (bot) {
     const omonShovotLink = await getSetting('omon_shovot_link') || omonLink;
     const channel = await getSetting('channel_username');
 
-    const text = `📊 Statistika:\n\n👥 Foydalanuvchilar: ${usersCount}\n\n🔹 HDP LC: ${totalHdp}\n🔹 Omon School (Umumiy): ${totalOmon}\n  • Urganch filiali: ${totalOmonUrganch}\n  • Gurlan filiali: ${totalOmonGurlan}\n  • Shovot filiali: ${totalOmonShovot}\n\n⚙️ <b>Joriy sozlamalar:</b>\nKanal: ${channel}\nHDP Link: ${hdpLink}\nOmon Link (Umumiy): ${omonLink}\nUrganch Link: ${omonUrganchLink}\nGurlan Link: ${omonGurlanLink}\nShovot Link: ${omonShovotLink}`;
+    const text = `📊 Statistika:\n\n👥 Foydalanuvchilar: ${usersCount}\n\n🔹 HDP LC: ${totalHdp}\n🔹 Urganch filiali: ${totalOmonUrganch}\n🔹 Gurlan filiali: ${totalOmonGurlan}\n🔹 Shovot filiali: ${totalOmonShovot}\n\n⚙️ <b>Joriy sozlamalar:</b>\nKanal: ${channel}\nHDP Link: ${hdpLink}\nUrganch Link: ${omonUrganchLink}\nGurlan Link: ${omonGurlanLink}\nShovot Link: ${omonShovotLink}`;
 
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback("✏️ Kanalni o'zgartirish", "edit_channel")],
@@ -479,13 +453,6 @@ if (bot) {
     if (ctx.from.id !== ADMIN_ID) return;
     adminState.set(ctx.from.id, "awaiting_hdp");
     ctx.reply("Yangi HDP LC silkasini yuboring (https://...):");
-    ctx.answerCbQuery();
-  });
-
-  bot.action("edit_omon", async (ctx) => {
-    if (ctx.from.id !== ADMIN_ID) return;
-    adminState.set(ctx.from.id, "awaiting_omon");
-    ctx.reply("Yangi Omon School silkasini yuboring (https://...):");
     ctx.answerCbQuery();
   });
 
@@ -587,10 +554,6 @@ if (bot) {
         settingsCache.delete('hdp_link');
         await setSetting('hdp_link', text);
         await ctx.reply("✅ HDP LC silkasi o'zgartirildi!");
-      } else if (state === "awaiting_omon") {
-        settingsCache.delete('omon_link');
-        await setSetting('omon_link', text);
-        await ctx.reply("✅ Omon School (Umumiy) silkasi o'zgartirildi!");
       } else if (state === "awaiting_omon_urganch") {
         settingsCache.delete('omon_urganch_link');
         await setSetting('omon_urganch_link', text);
