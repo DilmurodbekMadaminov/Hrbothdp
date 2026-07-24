@@ -45,6 +45,24 @@ async function initDb() {
       await setDoc(omonLinkRef, { value: 'https://forms.gle/97m9hCsBFovYKKrX7' }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/omon_link'));
     }
 
+    const omonUrganchRef = doc(db, 'settings', 'omon_urganch_link');
+    const omonUrganchSnap = await getDoc(omonUrganchRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/omon_urganch_link'));
+    if (!omonUrganchSnap.exists()) {
+      await setDoc(omonUrganchRef, { value: 'https://forms.gle/97m9hCsBFovYKKrX7' }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/omon_urganch_link'));
+    }
+
+    const omonGurlanRef = doc(db, 'settings', 'omon_gurlan_link');
+    const omonGurlanSnap = await getDoc(omonGurlanRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/omon_gurlan_link'));
+    if (!omonGurlanSnap.exists()) {
+      await setDoc(omonGurlanRef, { value: 'https://forms.gle/97m9hCsBFovYKKrX7' }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/omon_gurlan_link'));
+    }
+
+    const omonShovotRef = doc(db, 'settings', 'omon_shovot_link');
+    const omonShovotSnap = await getDoc(omonShovotRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/omon_shovot_link'));
+    if (!omonShovotSnap.exists()) {
+      await setDoc(omonShovotRef, { value: 'https://forms.gle/97m9hCsBFovYKKrX7' }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/omon_shovot_link'));
+    }
+
     const channelRef = doc(db, 'settings', 'channel_username');
     const channelSnap = await getDoc(channelRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/channel_username'));
     if (!channelSnap.exists() || channelSnap.data().value === "https://t.me/dilmurodbekmatematika") {
@@ -166,7 +184,9 @@ function mainMenuKeyboard() {
   return {
     reply_markup: {
       keyboard: [
-        [{ text: "HDP LC" }, { text: "Omon School" }]
+        [{ text: "HDP LC" }, { text: "Omon School" }],
+        [{ text: "Omon school Urganch filiali" }, { text: "Omon school Gurlan filiali" }],
+        [{ text: "Omon school Shovot filiali" }]
       ],
       resize_keyboard: true,
       is_persistent: true
@@ -259,7 +279,157 @@ if (bot) {
     const omonLink = await getSetting('omon_link');
     const safeUrl = formatButtonUrl(omonLink);
 
-    return ctx.reply("Omon School uchun ariza topshirish:", Markup.inlineKeyboard([
+    return ctx.reply("Omon School filialini tanlang yoki umumiy ariza topshirishingiz mumkin:", Markup.inlineKeyboard([
+      [Markup.button.url("Umumiy ariza topshirish", safeUrl)],
+      [Markup.button.callback("Urganch filiali", "branch_omon_urganch")],
+      [Markup.button.callback("Gurlan filiali", "branch_omon_gurlan")],
+      [Markup.button.callback("Shovot filiali", "branch_omon_shovot")]
+    ]));
+  });
+
+  bot.hears(["Omon school Urganch filiali", "Omon school Urganch filial"], async (ctx) => {
+    subCache.delete(ctx.from.id);
+    const subscribed = await checkSubscription(ctx);
+    if (!subscribed) {
+      return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
+    }
+
+    (async () => {
+      try {
+        const userRef = doc(db, 'users', String(ctx.from.id));
+        await setDoc(userRef, { omon_urganch: increment(1), omon: increment(1) }, { merge: true });
+      } catch(e: any) {
+        handleFirestoreError(e, OperationType.UPDATE, `users/${ctx.from.id}`);
+      }
+    })();
+    
+    const omonLink = await getSetting('omon_urganch_link') || await getSetting('omon_link');
+    const safeUrl = formatButtonUrl(omonLink);
+
+    return ctx.reply("Omon School (Urganch filiali) uchun ariza topshirish:", Markup.inlineKeyboard([
+      [Markup.button.url("Ariza topshirish", safeUrl)],
+    ]));
+  });
+
+  bot.hears(["Omon school Gurlan filiali", "Omon school Gurlan filial"], async (ctx) => {
+    subCache.delete(ctx.from.id);
+    const subscribed = await checkSubscription(ctx);
+    if (!subscribed) {
+      return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
+    }
+
+    (async () => {
+      try {
+        const userRef = doc(db, 'users', String(ctx.from.id));
+        await setDoc(userRef, { omon_gurlan: increment(1), omon: increment(1) }, { merge: true });
+      } catch(e: any) {
+        handleFirestoreError(e, OperationType.UPDATE, `users/${ctx.from.id}`);
+      }
+    })();
+    
+    const omonLink = await getSetting('omon_gurlan_link') || await getSetting('omon_link');
+    const safeUrl = formatButtonUrl(omonLink);
+
+    return ctx.reply("Omon School (Gurlan filiali) uchun ariza topshirish:", Markup.inlineKeyboard([
+      [Markup.button.url("Ariza topshirish", safeUrl)],
+    ]));
+  });
+
+  bot.hears(["Omon school Shovot filiali", "Omon school Shovot filial"], async (ctx) => {
+    subCache.delete(ctx.from.id);
+    const subscribed = await checkSubscription(ctx);
+    if (!subscribed) {
+      return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
+    }
+
+    (async () => {
+      try {
+        const userRef = doc(db, 'users', String(ctx.from.id));
+        await setDoc(userRef, { omon_shovot: increment(1), omon: increment(1) }, { merge: true });
+      } catch(e: any) {
+        handleFirestoreError(e, OperationType.UPDATE, `users/${ctx.from.id}`);
+      }
+    })();
+    
+    const omonLink = await getSetting('omon_shovot_link') || await getSetting('omon_link');
+    const safeUrl = formatButtonUrl(omonLink);
+
+    return ctx.reply("Omon School (Shovot filiali) uchun ariza topshirish:", Markup.inlineKeyboard([
+      [Markup.button.url("Ariza topshirish", safeUrl)],
+    ]));
+  });
+
+  bot.action("branch_omon_urganch", async (ctx) => {
+    subCache.delete(ctx.from.id);
+    const subscribed = await checkSubscription(ctx);
+    if (!subscribed) {
+      return ctx.answerCbQuery("Avval kanalga obuna bo‘ling!", { show_alert: true });
+    }
+    ctx.answerCbQuery().catch(() => {});
+
+    (async () => {
+      try {
+        const userRef = doc(db, 'users', String(ctx.from.id));
+        await setDoc(userRef, { omon_urganch: increment(1), omon: increment(1) }, { merge: true });
+      } catch(e: any) {
+        handleFirestoreError(e, OperationType.UPDATE, `users/${ctx.from.id}`);
+      }
+    })();
+    
+    const omonLink = await getSetting('omon_urganch_link') || await getSetting('omon_link');
+    const safeUrl = formatButtonUrl(omonLink);
+
+    return ctx.reply("Omon School (Urganch filiali) uchun ariza topshirish:", Markup.inlineKeyboard([
+      [Markup.button.url("Ariza topshirish", safeUrl)],
+    ]));
+  });
+
+  bot.action("branch_omon_gurlan", async (ctx) => {
+    subCache.delete(ctx.from.id);
+    const subscribed = await checkSubscription(ctx);
+    if (!subscribed) {
+      return ctx.answerCbQuery("Avval kanalga obuna bo‘ling!", { show_alert: true });
+    }
+    ctx.answerCbQuery().catch(() => {});
+
+    (async () => {
+      try {
+        const userRef = doc(db, 'users', String(ctx.from.id));
+        await setDoc(userRef, { omon_gurlan: increment(1), omon: increment(1) }, { merge: true });
+      } catch(e: any) {
+        handleFirestoreError(e, OperationType.UPDATE, `users/${ctx.from.id}`);
+      }
+    })();
+    
+    const omonLink = await getSetting('omon_gurlan_link') || await getSetting('omon_link');
+    const safeUrl = formatButtonUrl(omonLink);
+
+    return ctx.reply("Omon School (Gurlan filiali) uchun ariza topshirish:", Markup.inlineKeyboard([
+      [Markup.button.url("Ariza topshirish", safeUrl)],
+    ]));
+  });
+
+  bot.action("branch_omon_shovot", async (ctx) => {
+    subCache.delete(ctx.from.id);
+    const subscribed = await checkSubscription(ctx);
+    if (!subscribed) {
+      return ctx.answerCbQuery("Avval kanalga obuna bo‘ling!", { show_alert: true });
+    }
+    ctx.answerCbQuery().catch(() => {});
+
+    (async () => {
+      try {
+        const userRef = doc(db, 'users', String(ctx.from.id));
+        await setDoc(userRef, { omon_shovot: increment(1), omon: increment(1) }, { merge: true });
+      } catch(e: any) {
+        handleFirestoreError(e, OperationType.UPDATE, `users/${ctx.from.id}`);
+      }
+    })();
+    
+    const omonLink = await getSetting('omon_shovot_link') || await getSetting('omon_link');
+    const safeUrl = formatButtonUrl(omonLink);
+
+    return ctx.reply("Omon School (Shovot filiali) uchun ariza topshirish:", Markup.inlineKeyboard([
       [Markup.button.url("Ariza topshirish", safeUrl)],
     ]));
   });
@@ -278,24 +448,36 @@ if (bot) {
     
     let totalHdp = 0;
     let totalOmon = 0;
+    let totalOmonUrganch = 0;
+    let totalOmonGurlan = 0;
+    let totalOmonShovot = 0;
     usersSnap.forEach((docSnap) => {
       const data = docSnap.data();
       totalHdp += data.hdp || 0;
       totalOmon += data.omon || 0;
+      totalOmonUrganch += data.omon_urganch || 0;
+      totalOmonGurlan += data.omon_gurlan || 0;
+      totalOmonShovot += data.omon_shovot || 0;
     });
     
     const usersCount = usersSnap.size;
 
     const hdpLink = await getSetting('hdp_link');
     const omonLink = await getSetting('omon_link');
+    const omonUrganchLink = await getSetting('omon_urganch_link') || omonLink;
+    const omonGurlanLink = await getSetting('omon_gurlan_link') || omonLink;
+    const omonShovotLink = await getSetting('omon_shovot_link') || omonLink;
     const channel = await getSetting('channel_username');
 
-    const text = `📊 Statistika:\n\n👥 Foydalanuvchilar: ${usersCount}\n\n🔹 HDP LC bosilgan: ${totalHdp}\n🔹 Omon School bosilgan: ${totalOmon}\n\n⚙️ <b>Joriy sozlamalar:</b>\nKanal: ${channel}\nHDP Link: ${hdpLink}\nOmon Link: ${omonLink}`;
+    const text = `📊 Statistika:\n\n👥 Foydalanuvchilar: ${usersCount}\n\n🔹 HDP LC: ${totalHdp}\n🔹 Omon School (Umumiy): ${totalOmon}\n  • Urganch filiali: ${totalOmonUrganch}\n  • Gurlan filiali: ${totalOmonGurlan}\n  • Shovot filiali: ${totalOmonShovot}\n\n⚙️ <b>Joriy sozlamalar:</b>\nKanal: ${channel}\nHDP Link: ${hdpLink}\nOmon Link (Umumiy): ${omonLink}\nUrganch Link: ${omonUrganchLink}\nGurlan Link: ${omonGurlanLink}\nShovot Link: ${omonShovotLink}`;
 
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback("✏️ Kanalni o'zgartirish", "edit_channel")],
       [Markup.button.callback("✏️ HDP silkani o'zgartirish", "edit_hdp")],
-      [Markup.button.callback("✏️ Omon silkani o'zgartirish", "edit_omon")],
+      [Markup.button.callback("✏️ Omon (Umumiy) silkani o'zgartirish", "edit_omon")],
+      [Markup.button.callback("✏️ Urganch silkani o'zgartirish", "edit_omon_urganch")],
+      [Markup.button.callback("✏️ Gurlan silkani o'zgartirish", "edit_omon_gurlan")],
+      [Markup.button.callback("✏️ Shovot silkani o'zgartirish", "edit_omon_shovot")],
       [Markup.button.callback("📢 Xabar tarqatish", "broadcast_msg")],
       [Markup.button.callback("❌ Bekor qilish", "cancel_admin")]
     ]);
@@ -326,6 +508,27 @@ if (bot) {
     if (ctx.from.id !== ADMIN_ID) return;
     adminState.set(ctx.from.id, "awaiting_omon");
     ctx.reply("Yangi Omon School silkasini yuboring (https://...):");
+    ctx.answerCbQuery();
+  });
+
+  bot.action("edit_omon_urganch", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return;
+    adminState.set(ctx.from.id, "awaiting_omon_urganch");
+    ctx.reply("Yangi Omon School Urganch filiali silkasini yuboring (https://...):");
+    ctx.answerCbQuery();
+  });
+
+  bot.action("edit_omon_gurlan", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return;
+    adminState.set(ctx.from.id, "awaiting_omon_gurlan");
+    ctx.reply("Yangi Omon School Gurlan filiali silkasini yuboring (https://...):");
+    ctx.answerCbQuery();
+  });
+
+  bot.action("edit_omon_shovot", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return;
+    adminState.set(ctx.from.id, "awaiting_omon_shovot");
+    ctx.reply("Yangi Omon School Shovot filiali silkasini yuboring (https://...):");
     ctx.answerCbQuery();
   });
 
@@ -409,7 +612,19 @@ if (bot) {
       } else if (state === "awaiting_omon") {
         settingsCache.delete('omon_link');
         await setSetting('omon_link', text);
-        await ctx.reply("✅ Omon School silkasi o'zgartirildi!");
+        await ctx.reply("✅ Omon School (Umumiy) silkasi o'zgartirildi!");
+      } else if (state === "awaiting_omon_urganch") {
+        settingsCache.delete('omon_urganch_link');
+        await setSetting('omon_urganch_link', text);
+        await ctx.reply("✅ Omon School Urganch filiali silkasi o'zgartirildi!");
+      } else if (state === "awaiting_omon_gurlan") {
+        settingsCache.delete('omon_gurlan_link');
+        await setSetting('omon_gurlan_link', text);
+        await ctx.reply("✅ Omon School Gurlan filiali silkasi o'zgartirildi!");
+      } else if (state === "awaiting_omon_shovot") {
+        settingsCache.delete('omon_shovot_link');
+        await setSetting('omon_shovot_link', text);
+        await ctx.reply("✅ Omon School Shovot filiali silkasi o'zgartirildi!");
       }
       adminState.delete(userId);
       await sendAdminPanel(ctx);
