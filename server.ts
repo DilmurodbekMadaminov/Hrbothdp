@@ -279,8 +279,7 @@ if (bot) {
     const omonLink = await getSetting('omon_link');
     const safeUrl = formatButtonUrl(omonLink);
 
-    return ctx.reply("Omon School filialini tanlang yoki umumiy ariza topshirishingiz mumkin:", Markup.inlineKeyboard([
-      [Markup.button.url("Umumiy ariza topshirish", safeUrl)],
+    return ctx.reply("Omon School filialini tanlang:", Markup.inlineKeyboard([
       [Markup.button.callback("Urganch filiali", "branch_omon_urganch")],
       [Markup.button.callback("Gurlan filiali", "branch_omon_gurlan")],
       [Markup.button.callback("Shovot filiali", "branch_omon_shovot")]
@@ -474,7 +473,6 @@ if (bot) {
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback("✏️ Kanalni o'zgartirish", "edit_channel")],
       [Markup.button.callback("✏️ HDP silkani o'zgartirish", "edit_hdp")],
-      [Markup.button.callback("✏️ Omon (Umumiy) silkani o'zgartirish", "edit_omon")],
       [Markup.button.callback("✏️ Urganch silkani o'zgartirish", "edit_omon_urganch")],
       [Markup.button.callback("✏️ Gurlan silkani o'zgartirish", "edit_omon_gurlan")],
       [Markup.button.callback("✏️ Shovot silkani o'zgartirish", "edit_omon_shovot")],
