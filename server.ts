@@ -32,47 +32,35 @@ const app = express();
 // ================= DATABASE =================
 async function initDb() {
   try {
-    // Check if default settings exist, create them if not
-    const hdpLinkRef = doc(db, 'settings', 'hdp_link');
-    const hdpLinkSnap = await getDoc(hdpLinkRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/hdp_link'));
-    if (!hdpLinkSnap.exists()) {
-      await setDoc(hdpLinkRef, { value: 'https://forms.gle/f6ZiQtiqCAH1CLy87' }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/hdp_link'));
+    // Pre-load all settings into memory cache
+    const settingsSnap = await getDocs(collection(db, 'settings')).catch(() => null);
+    if (settingsSnap) {
+      settingsSnap.forEach((docSnap) => {
+        settingsCache.set(docSnap.id, docSnap.data().value);
+      });
     }
 
-    const omonLinkRef = doc(db, 'settings', 'omon_link');
-    const omonLinkSnap = await getDoc(omonLinkRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/omon_link'));
-    if (!omonLinkSnap.exists()) {
-      await setDoc(omonLinkRef, { value: 'https://forms.gle/97m9hCsBFovYKKrX7' }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/omon_link'));
-    }
+    const defaults: Record<string, string> = {
+      hdp_link: 'https://forms.gle/f6ZiQtiqCAH1CLy87',
+      omon_link: 'https://forms.gle/97m9hCsBFovYKKrX7',
+      omon_urganch_link: 'https://forms.gle/97m9hCsBFovYKKrX7',
+      omon_gurlan_link: 'https://forms.gle/97m9hCsBFovYKKrX7',
+      omon_shovot_link: 'https://forms.gle/97m9hCsBFovYKKrX7',
+      channel_username: CHANNEL_USERNAME
+    };
 
-    const omonUrganchRef = doc(db, 'settings', 'omon_urganch_link');
-    const omonUrganchSnap = await getDoc(omonUrganchRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/omon_urganch_link'));
-    if (!omonUrganchSnap.exists()) {
-      await setDoc(omonUrganchRef, { value: 'https://forms.gle/97m9hCsBFovYKKrX7' }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/omon_urganch_link'));
-    }
-
-    const omonGurlanRef = doc(db, 'settings', 'omon_gurlan_link');
-    const omonGurlanSnap = await getDoc(omonGurlanRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/omon_gurlan_link'));
-    if (!omonGurlanSnap.exists()) {
-      await setDoc(omonGurlanRef, { value: 'https://forms.gle/97m9hCsBFovYKKrX7' }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/omon_gurlan_link'));
-    }
-
-    const omonShovotRef = doc(db, 'settings', 'omon_shovot_link');
-    const omonShovotSnap = await getDoc(omonShovotRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/omon_shovot_link'));
-    if (!omonShovotSnap.exists()) {
-      await setDoc(omonShovotRef, { value: 'https://forms.gle/97m9hCsBFovYKKrX7' }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/omon_shovot_link'));
-    }
-
-    const channelRef = doc(db, 'settings', 'channel_username');
-    const channelSnap = await getDoc(channelRef).catch(e => handleFirestoreError(e, OperationType.GET, 'settings/channel_username'));
-    if (!channelSnap.exists() || channelSnap.data().value === "https://t.me/dilmurodbekmatematika") {
-      await setDoc(channelRef, { value: CHANNEL_USERNAME }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/channel_username'));
+    for (const [key, defVal] of Object.entries(defaults)) {
+      if (!settingsCache.has(key)) {
+        const docRef = doc(db, 'settings', key);
+        await setDoc(docRef, { value: defVal }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, `settings/${key}`));
+        settingsCache.set(key, defVal);
+      }
     }
   } catch (err: any) {
-    if (err.message.includes('the client is offline')) {
+    if (err.message?.includes('the client is offline')) {
       console.error("Please check your Firebase configuration. The client is offline.");
     }
-    throw err;
+    console.error("initDb error:", err.message);
   }
 }
 
@@ -184,7 +172,7 @@ function mainMenuKeyboard() {
   return {
     reply_markup: {
       keyboard: [
-        [{ text: "HDP LC" }, { text: "Omon School" }],
+        [{ text: "HDP LC" }],
         [{ text: "Omon school Urganch filiali" }, { text: "Omon school Gurlan filiali" }],
         [{ text: "Omon school Shovot filiali" }]
       ],
@@ -235,7 +223,6 @@ if (bot) {
   });
 
   bot.hears("HDP LC", async (ctx) => {
-    subCache.delete(ctx.from.id); // Asl vaqtda tekshirish uchun keshni tozamiz
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) {
       return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
@@ -260,7 +247,6 @@ if (bot) {
   });
 
   bot.hears("Omon School", async (ctx) => {
-    subCache.delete(ctx.from.id); // Asl vaqtda tekshirish uchun keshni tozamiz
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) {
       return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
@@ -287,7 +273,6 @@ if (bot) {
   });
 
   bot.hears(["Omon school Urganch filiali", "Omon school Urganch filial"], async (ctx) => {
-    subCache.delete(ctx.from.id);
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) {
       return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
@@ -311,7 +296,6 @@ if (bot) {
   });
 
   bot.hears(["Omon school Gurlan filiali", "Omon school Gurlan filial"], async (ctx) => {
-    subCache.delete(ctx.from.id);
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) {
       return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
@@ -335,7 +319,6 @@ if (bot) {
   });
 
   bot.hears(["Omon school Shovot filiali", "Omon school Shovot filial"], async (ctx) => {
-    subCache.delete(ctx.from.id);
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) {
       return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
@@ -359,12 +342,11 @@ if (bot) {
   });
 
   bot.action("branch_omon_urganch", async (ctx) => {
-    subCache.delete(ctx.from.id);
+    ctx.answerCbQuery().catch(() => {});
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) {
-      return ctx.answerCbQuery("Avval kanalga obuna bo‘ling!", { show_alert: true });
+      return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
     }
-    ctx.answerCbQuery().catch(() => {});
 
     (async () => {
       try {
@@ -384,12 +366,11 @@ if (bot) {
   });
 
   bot.action("branch_omon_gurlan", async (ctx) => {
-    subCache.delete(ctx.from.id);
+    ctx.answerCbQuery().catch(() => {});
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) {
-      return ctx.answerCbQuery("Avval kanalga obuna bo‘ling!", { show_alert: true });
+      return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
     }
-    ctx.answerCbQuery().catch(() => {});
 
     (async () => {
       try {
@@ -409,12 +390,11 @@ if (bot) {
   });
 
   bot.action("branch_omon_shovot", async (ctx) => {
-    subCache.delete(ctx.from.id);
+    ctx.answerCbQuery().catch(() => {});
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) {
-      return ctx.answerCbQuery("Avval kanalga obuna bo‘ling!", { show_alert: true });
+      return ctx.reply("Avval kanalga obuna bo‘ling:", await subscriptionKeyboard());
     }
-    ctx.answerCbQuery().catch(() => {});
 
     (async () => {
       try {
